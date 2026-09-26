@@ -109,6 +109,21 @@ The plugin does not itself add MKV support to Finder. An appropriate MKV
 Quick Look handler is still required if your version/configuration of
 macOS does not handle MKV files.
 
+One option is [QuickLook
+Video](https://github.com/Marginal/QuickLookVideo), which adds Finder
+Quick Look previews and other Finder support for Matroska (`.mkv`) and a
+wide range of other non-native media formats and codecs.
+
+With Homebrew, it can be installed with:
+
+``` bash
+brew install --cask quicklook-video
+```
+
+After installation, run **QuickLook Video** from the Applications folder
+and enable its Media Extensions in **System Settings → General → Login
+Items & Extensions** if needed.
+
 ## Requirements
 
 -   macOS
