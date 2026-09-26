@@ -114,11 +114,7 @@ Video](https://github.com/Marginal/QuickLookVideo), which adds Finder
 Quick Look previews and other Finder support for Matroska (`.mkv`) and a
 wide range of other non-native media formats and codecs.
 
-With Homebrew, it can be installed with:
-
-``` bash
-brew install --cask quicklook-video
-```
+Find the latest release, and drag the application into your Applications folder.
 
 After installation, run **QuickLook Video** from the Applications folder
 and enable its Media Extensions in **System Settings → General → Login
