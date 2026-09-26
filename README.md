@@ -1,25 +1,24 @@
 # yt-dlp Quick Look Remux
 
 A small [yt-dlp](https://github.com/yt-dlp/yt-dlp) postprocessor plugin
-for improving macOS Finder Quick Look compatibility with downloaded
+that improves macOS Finder Quick Look compatibility with downloaded
 videos.
 
 ## The problem
 
-macOS Finder Quick Look handles common MP4 video codecs such as H.264
-and HEVC well, but on my Mac, MP4 files containing VP9 or AV1 video
-would show Finder thumbnails without playing in Quick Look.
+On my Mac, Finder Quick Look handles H.264 and HEVC in MP4 normally, but
+MP4 files containing VP9 or AV1 can show thumbnails without actually
+playing in Quick Look.
 
-The same VP9/AV1 video streams work when placed in an MKV container with
-an appropriate MKV Quick Look handler installed.
+The same VP9/AV1 video streams work in an MKV container when an
+appropriate MKV Quick Look handler is installed.
 
-Since changing the container does not require video transcoding, yt-dlp
-can automatically remux affected downloads from MP4 to MKV with FFmpeg
-stream copy. This is fast and does not introduce generation loss.
+This plugin automatically detects those downloads and remuxes them from
+MP4 to MKV. FFmpeg copies the existing compressed streams rather than
+transcoding them, so the operation is fast and introduces no generation
+loss.
 
 ## Behavior
-
-The postprocessor examines the final file produced by yt-dlp.
 
   Container   Video codec   Action
   ----------- ------------- -----------------
@@ -29,76 +28,12 @@ The postprocessor examines the final file produced by yt-dlp.
   MP4         AV1           Remux to MKV
   Other       Any           Leave unchanged
 
-The plugin recognizes codec identifiers encountered in yt-dlp metadata,
-including `vp9`, `vp09...`, `av1`, and `av01...`.
-
-The operation is a **remux, not a transcode**. The existing compressed
-video and audio streams are copied into the MKV container.
-
-## Repository structure
-
-``` text
-yt-dlp-quicklook-remux/
-├── README.md
-└── yt_dlp_plugins/
-    └── postprocessor/
-        └── quicklook.py
-```
-
-## Plugin
-
-Create `yt_dlp_plugins/postprocessor/quicklook.py` with:
-
-``` python
-from yt_dlp.postprocessor.ffmpeg import FFmpegVideoRemuxerPP
-
-
-class QuickLookRemuxPP(FFmpegVideoRemuxerPP):
-    """Remux VP9/AV1 MP4 files to MKV without transcoding."""
-
-    def __init__(self, downloader=None):
-        super().__init__(downloader, preferedformat='mkv')
-
-    def run(self, info):
-        ext = (info.get('ext') or '').lower()
-        vcodec = (info.get('vcodec') or '').lower()
-
-        needs_remux = (
-            ext == 'mp4'
-            and vcodec.startswith(('vp9', 'vp09', 'av1', 'av01'))
-        )
-
-        if not needs_remux:
-            self.to_screen(
-                f'Quick Look remux not needed: '
-                f'{ext or "unknown"} / {vcodec or "unknown codec"}'
-            )
-            return [], info
-
-        self.to_screen(
-            f'Quick Look compatibility: remuxing '
-            f'{vcodec} MP4 to MKV'
-        )
-
-        return super().run(info)
-```
+The plugin recognizes yt-dlp codec identifiers including `vp9`,
+`vp09...`, `av1`, and `av01...`.
 
 ## Installation
 
-yt-dlp supports plugin packages containing a `yt_dlp_plugins` namespace
-directory. On macOS, one recommended user plugin location is:
-
-``` text
-~/.config/yt-dlp/plugins/<package-name>/yt_dlp_plugins/
-```
-
-Clone or copy this repository so the installed plugin ends up at:
-
-``` text
-~/.config/yt-dlp/plugins/quicklook-remux/yt_dlp_plugins/postprocessor/quicklook.py
-```
-
-For example:
+Clone the repository into yt-dlp's user plugin directory:
 
 ``` bash
 mkdir -p ~/.config/yt-dlp/plugins
@@ -106,25 +41,24 @@ cd ~/.config/yt-dlp/plugins
 git clone YOUR_REPOSITORY_URL quicklook-remux
 ```
 
-Run yt-dlp with `-v` to verify discovery. The debug output should
-contain something similar to:
+The resulting plugin should be located at:
 
 ``` text
-[debug] Post-Processor Plugins: QuickLookRemuxPP
-[debug] Plugin directories: .../quicklook-remux/yt_dlp_plugins
+~/.config/yt-dlp/plugins/quicklook-remux/yt_dlp_plugins/postprocessor/quicklook.py
 ```
 
-## yt-dlp configuration
+yt-dlp will discover the plugin automatically; `--plugin-dirs` is not
+required.
 
-Postprocessor plugins must be enabled with `--use-postprocessor`.
+## Configuration
 
-On macOS, yt-dlp's recommended user configuration location is:
+Enable the postprocessor in:
 
 ``` text
 ~/.config/yt-dlp/config
 ```
 
-Example configuration:
+For example, my configuration is:
 
 ``` text
 # Use Chrome-compatible requests
@@ -137,16 +71,26 @@ Example configuration:
 --use-postprocessor QuickLookRemux
 ```
 
-With this configuration, normal downloads require only:
+With that configuration, normal downloads require only:
 
 ``` bash
 yt-dlp "URL"
 ```
 
-The plugin is discovered automatically from the standard plugin
-directory, so `--plugin-dirs` is not required.
+## Verification
 
-## Verifying the remux
+Run yt-dlp with verbose output:
+
+``` bash
+yt-dlp -v --simulate "URL"
+```
+
+Plugin discovery should appear in the debug output:
+
+``` text
+[debug] Post-Processor Plugins: QuickLookRemuxPP
+[debug] Plugin directories: .../quicklook-remux/yt_dlp_plugins
+```
 
 For an actual AV1 or VP9 MP4 download, the postprocessor should report
 something similar to:
@@ -156,61 +100,40 @@ something similar to:
 [VideoRemuxer] Remuxing video from mp4 to mkv
 ```
 
-The resulting `.mkv` contains the original compressed media streams;
-FFmpeg changes the container rather than re-encoding the video.
-
-You can inspect the resulting streams with:
-
-``` bash
-ffprobe "video.mkv"
-```
-
-## Why not transcode to H.264?
-
-Transcoding AV1 or VP9 to H.264 produces a more broadly compatible MP4,
-but it requires substantially more processing, introduces another lossy
-encoding generation, and may require substantially more storage for
-comparable quality.
-
-For local storage, keeping the original VP9/AV1 stream and changing only
-the container is preferable. When a broadly shareable copy is needed, an
-H.264/AAC MP4 can be created separately.
+The resulting MKV retains the original compressed video and audio
+streams.
 
 ## Quick Look requirement
 
-This plugin solves the **VP9/AV1-in-MP4 container problem** by producing
-MKV instead.
-
-It does not itself add MKV support to Finder. If your version of macOS
-does not Quick Look MKV files natively, you will still need an
-appropriate MKV Quick Look handler.
+The plugin does not itself add MKV support to Finder. An appropriate MKV
+Quick Look handler is still required if your version/configuration of
+macOS does not handle MKV files.
 
 ## Requirements
 
 -   macOS
 -   yt-dlp with plugin support
 -   FFmpeg and ffprobe
--   An MKV-capable Finder Quick Look handler, if required by your macOS
-    setup
+-   An MKV-capable Finder Quick Look handler, if required
 
-Initial setup tested with:
+Initial setup tested with Apple Silicon, yt-dlp 2026.07.04, Python
+3.14.6 arm64, and FFmpeg 9.0.2 arm64.
 
--   Apple Silicon / arm64
--   yt-dlp 2026.07.04
--   Python 3.14.6 arm64
--   FFmpeg 9.0.2 arm64
+## Why remux instead of transcode?
 
-## Disabling the configuration
+Transcoding VP9 or AV1 to H.264 would provide broader compatibility, but
+requires substantially more processing, introduces another lossy
+encoding generation, and can produce significantly larger files.
 
-yt-dlp supports `--ignore-config` when you want to bypass your normal
-configuration for a particular invocation:
+For local use, this plugin instead preserves the original VP9/AV1
+streams and changes only the container. A separate H.264/AAC copy can be
+created when broader sharing compatibility is needed.
+
+## Bypassing the configuration
+
+To run yt-dlp without the normal configuration for a particular
+invocation:
 
 ``` bash
 yt-dlp --ignore-config "URL"
 ```
-
-## Notes
-
-The plugin intentionally has a narrow scope. It only remuxes an MP4 when
-yt-dlp reports a VP9 or AV1 video codec. H.264/HEVC MP4 files and other
-containers are left untouched.
